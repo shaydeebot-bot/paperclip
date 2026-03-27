@@ -130,6 +130,13 @@ export const queryKeys = {
     runs: (companyId: string) => ["pipeline-runs", companyId] as const,
     runDetail: (runId: string) => ["pipeline-runs", "detail", runId] as const,
   },
+  training: {
+    runs: (companyId: string) => ["training-runs", companyId] as const,
+    runDetail: (runId: string) => ["training-runs", "detail", runId] as const,
+    configs: (companyId: string) => ["training-configs", companyId] as const,
+    configDetail: (configId: string) => ["training-configs", "detail", configId] as const,
+    skillHealth: (companyId: string) => ["skill-health", companyId] as const,
+  },
   skills: {
     available: ["skills", "available"] as const,
   },

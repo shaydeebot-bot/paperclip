@@ -15,6 +15,8 @@ import {
   Play,
   Shield,
   BarChart3,
+  Dumbbell,
+  Wand2,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { SidebarSection } from "./SidebarSection";
@@ -116,6 +118,8 @@ export function Sidebar() {
           <SidebarNavItem to="/pipelines/runs" label="Runs" icon={Play} />
           <SidebarNavItem to="/pipelines/qa" label="QA" icon={Shield} />
           <SidebarNavItem to="/pipelines/eval" label="Eval" icon={BarChart3} />
+          <SidebarNavItem to="/pipelines/training" label="Agent Trainer" icon={Dumbbell} />
+          <SidebarNavItem to="/pipelines/wizard" label="Wizard" icon={Wand2} />
         </SidebarSection>
 
         <SidebarSection label="Company">

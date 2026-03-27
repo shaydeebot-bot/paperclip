@@ -117,9 +117,12 @@ export function pipelineRoutes(db: Db) {
       const companyId = req.params.companyId as string;
       assertCompanyAccess(req, companyId);
 
+      // Only pass triggeredByUserId if it's a valid UUID (not the synthetic "local-board" string)
+      const userId = req.actor?.type === "board" ? req.actor.userId : undefined;
+      const isUuid = userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
       const run = await svc.startRun(companyId, {
         ...req.body,
-        triggeredByUserId: req.actor?.type === "board" ? req.actor.userId : undefined,
+        triggeredByUserId: isUuid ? userId : undefined,
       });
       res.status(201).json(run);
     },

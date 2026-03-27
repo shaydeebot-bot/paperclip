@@ -43,6 +43,11 @@ import { PipelineRuns } from "./pages/PipelineRuns";
 import { PipelineRunDetail } from "./pages/PipelineRunDetail";
 import { PipelineQA } from "./pages/PipelineQA";
 import { PipelineEval } from "./pages/PipelineEval";
+import { TrainingRuns } from "./pages/TrainingRuns";
+import { TrainingRunDetail } from "./pages/TrainingRunDetail";
+import { TrainingConfigs } from "./pages/TrainingConfigs";
+import { SkillHealth } from "./pages/SkillHealth";
+import { PipelineWizard } from "./pages/PipelineWizard";
 import { AuthPage } from "./pages/Auth";
 import { BoardClaimPage } from "./pages/BoardClaim";
 import { CliAuthPage } from "./pages/CliAuth";
@@ -168,6 +173,11 @@ function boardRoutes() {
       <Route path="pipelines/runs/:runId" element={<PipelineRunDetail />} />
       <Route path="pipelines/qa" element={<PipelineQA />} />
       <Route path="pipelines/eval" element={<PipelineEval />} />
+      <Route path="pipelines/training" element={<TrainingRuns />} />
+      <Route path="pipelines/training/configs" element={<TrainingConfigs />} />
+      <Route path="pipelines/training/health" element={<SkillHealth />} />
+      <Route path="pipelines/training/:runId" element={<TrainingRunDetail />} />
+      <Route path="pipelines/wizard" element={<PipelineWizard />} />
       <Route path="execution-workspaces/:workspaceId" element={<ExecutionWorkspaceDetail />} />
       <Route path="goals" element={<Goals />} />
       <Route path="goals/:goalId" element={<GoalDetail />} />
