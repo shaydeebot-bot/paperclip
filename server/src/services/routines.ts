@@ -33,6 +33,7 @@ import { parseCron, validateCron } from "./cron.js";
 import { heartbeatService } from "./heartbeat.js";
 import { queueIssueAssignmentWakeup, type IssueAssignmentWakeupDeps } from "./issue-assignment-wakeup.js";
 import { logActivity } from "./activity-log.js";
+import { pipelineService } from "./pipeline/index.js";
 
 const OPEN_ISSUE_STATUSES = ["backlog", "todo", "in_progress", "in_review", "blocked"];
 const LIVE_HEARTBEAT_RUN_STATUSES = ["queued", "running"];
@@ -560,6 +561,54 @@ export function routineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeup
       const nextRunAt = input.trigger?.kind === "schedule" && input.trigger.cronExpression && input.trigger.timezone
         ? nextCronTickInTimeZone(input.trigger.cronExpression, input.trigger.timezone, triggeredAt)
         : undefined;
+
+      // ── Pipeline dispatch path ──────────────────────────────────────────
+      // If this routine has a pipeline template, create a pipeline run
+      // instead of an issue. The pipeline service handles orchestration.
+      if (input.routine.pipelineTemplateId) {
+        try {
+          const pipelineSvc = pipelineService(txDb as unknown as Db);
+          const pipelineRun = await pipelineSvc.startRun(input.routine.companyId, {
+            templateId: input.routine.pipelineTemplateId,
+            name: `${input.routine.title} (routine run)`,
+            inputContext: {
+              ...(input.routine.pipelineParams as Record<string, unknown> ?? {}),
+              ...(input.payload ?? {}),
+              routineId: input.routine.id,
+              routineRunId: createdRun.id,
+            },
+            triggerSource: `routine:${input.source}`,
+          });
+
+          const updated = await finalizeRun(createdRun.id, {
+            status: "pipeline_created",
+            linkedPipelineRunId: pipelineRun.id,
+          }, txDb);
+          await updateRoutineTouchedState({
+            routineId: input.routine.id,
+            triggerId: input.trigger?.id ?? null,
+            triggeredAt,
+            status: "pipeline_created",
+            nextRunAt,
+          }, txDb);
+          return updated ?? createdRun;
+        } catch (error) {
+          const failureReason = error instanceof Error ? error.message : String(error);
+          const failed = await finalizeRun(createdRun.id, {
+            status: "failed",
+            failureReason,
+            completedAt: new Date(),
+          }, txDb);
+          await updateRoutineTouchedState({
+            routineId: input.routine.id,
+            triggerId: input.trigger?.id ?? null,
+            triggeredAt,
+            status: "failed",
+            nextRunAt,
+          }, txDb);
+          return failed ?? createdRun;
+        }
+      }
 
       let createdIssue: Awaited<ReturnType<typeof issueSvc.create>> | null = null;
       try {

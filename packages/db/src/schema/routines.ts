@@ -13,6 +13,8 @@ import { agents } from "./agents.js";
 import { companies } from "./companies.js";
 import { companySecrets } from "./company_secrets.js";
 import { issues } from "./issues.js";
+import { pipelineRuns } from "./pipeline_runs.js";
+import { pipelineTemplates } from "./pipeline_templates.js";
 import { projects } from "./projects.js";
 import { goals } from "./goals.js";
 
@@ -27,6 +29,16 @@ export const routines = pgTable(
     title: text("title").notNull(),
     description: text("description"),
     assigneeAgentId: uuid("assignee_agent_id").notNull().references(() => agents.id),
+
+    /**
+     * If set, this routine triggers a pipeline run instead of creating an issue.
+     * The pipeline template defines the multi-agent workflow to execute.
+     */
+    pipelineTemplateId: uuid("pipeline_template_id").references(() => pipelineTemplates.id, { onDelete: "set null" }),
+
+    /** Optional params passed to the pipeline run's inputContext */
+    pipelineParams: jsonb("pipeline_params").$type<Record<string, unknown>>(),
+
     priority: text("priority").notNull().default("medium"),
     status: text("status").notNull().default("active"),
     concurrencyPolicy: text("concurrency_policy").notNull().default("coalesce_if_active"),
@@ -95,6 +107,7 @@ export const routineRuns = pgTable(
     idempotencyKey: text("idempotency_key"),
     triggerPayload: jsonb("trigger_payload").$type<Record<string, unknown>>(),
     linkedIssueId: uuid("linked_issue_id").references(() => issues.id, { onDelete: "set null" }),
+    linkedPipelineRunId: uuid("linked_pipeline_run_id").references(() => pipelineRuns.id, { onDelete: "set null" }),
     coalescedIntoRunId: uuid("coalesced_into_run_id"),
     failureReason: text("failure_reason"),
     completedAt: timestamp("completed_at", { withTimezone: true }),

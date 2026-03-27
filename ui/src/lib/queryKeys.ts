@@ -124,6 +124,12 @@ export const queryKeys = {
   liveRuns: (companyId: string) => ["live-runs", companyId] as const,
   runIssues: (runId: string) => ["run-issues", runId] as const,
   org: (companyId: string) => ["org", companyId] as const,
+  pipelines: {
+    templates: (companyId: string) => ["pipeline-templates", companyId] as const,
+    templateDetail: (templateId: string) => ["pipeline-templates", "detail", templateId] as const,
+    runs: (companyId: string) => ["pipeline-runs", companyId] as const,
+    runDetail: (runId: string) => ["pipeline-runs", "detail", runId] as const,
+  },
   skills: {
     available: ["skills", "available"] as const,
   },

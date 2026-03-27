@@ -11,6 +11,10 @@ import {
   Boxes,
   Repeat,
   Settings,
+  Layers,
+  Play,
+  Shield,
+  BarChart3,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { SidebarSection } from "./SidebarSection";
@@ -106,6 +110,13 @@ export function Sidebar() {
         <SidebarProjects />
 
         <SidebarAgents />
+
+        <SidebarSection label="Pipelines">
+          <SidebarNavItem to="/pipelines/templates" label="Templates" icon={Layers} />
+          <SidebarNavItem to="/pipelines/runs" label="Runs" icon={Play} />
+          <SidebarNavItem to="/pipelines/qa" label="QA" icon={Shield} />
+          <SidebarNavItem to="/pipelines/eval" label="Eval" icon={BarChart3} />
+        </SidebarSection>
 
         <SidebarSection label="Company">
           <SidebarNavItem to="/org" label="Org" icon={Network} />

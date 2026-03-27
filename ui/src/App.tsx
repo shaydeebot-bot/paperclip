@@ -37,6 +37,12 @@ import { PluginPage } from "./pages/PluginPage";
 import { RunTranscriptUxLab } from "./pages/RunTranscriptUxLab";
 import { OrgChart } from "./pages/OrgChart";
 import { NewAgent } from "./pages/NewAgent";
+import { PipelineTemplates } from "./pages/PipelineTemplates";
+import { PipelineTemplateDetail } from "./pages/PipelineTemplateDetail";
+import { PipelineRuns } from "./pages/PipelineRuns";
+import { PipelineRunDetail } from "./pages/PipelineRunDetail";
+import { PipelineQA } from "./pages/PipelineQA";
+import { PipelineEval } from "./pages/PipelineEval";
 import { AuthPage } from "./pages/Auth";
 import { BoardClaimPage } from "./pages/BoardClaim";
 import { CliAuthPage } from "./pages/CliAuth";
@@ -155,6 +161,13 @@ function boardRoutes() {
       <Route path="issues/:issueId" element={<IssueDetail />} />
       <Route path="routines" element={<Routines />} />
       <Route path="routines/:routineId" element={<RoutineDetail />} />
+      <Route path="pipelines" element={<Navigate to="/pipelines/templates" replace />} />
+      <Route path="pipelines/templates" element={<PipelineTemplates />} />
+      <Route path="pipelines/templates/:templateId" element={<PipelineTemplateDetail />} />
+      <Route path="pipelines/runs" element={<PipelineRuns />} />
+      <Route path="pipelines/runs/:runId" element={<PipelineRunDetail />} />
+      <Route path="pipelines/qa" element={<PipelineQA />} />
+      <Route path="pipelines/eval" element={<PipelineEval />} />
       <Route path="execution-workspaces/:workspaceId" element={<ExecutionWorkspaceDetail />} />
       <Route path="goals" element={<Goals />} />
       <Route path="goals/:goalId" element={<GoalDetail />} />

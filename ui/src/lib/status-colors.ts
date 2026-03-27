@@ -66,6 +66,11 @@ export const statusBadge: Record<string, string> = {
   approved: "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300",
   rejected: "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300",
 
+  // Pipeline phase statuses
+  passed: "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300",
+  skipped: "bg-muted text-muted-foreground",
+  retrying: "bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300",
+
   // Issue statuses — consistent hues with issueStatusIcon above
   backlog: "bg-muted text-muted-foreground",
   todo: "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300",
