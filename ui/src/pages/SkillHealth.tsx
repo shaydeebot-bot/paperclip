@@ -1,5 +1,5 @@
-import { useEffect, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@/lib/router";
 import {
   Activity,
@@ -67,6 +67,19 @@ export function SkillHealth() {
   const { selectedCompanyId } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [trainingSkill, setTrainingSkill] = useState<string | null>(null);
+
+  const startTraining = useMutation({
+    mutationFn: (skillSlug: string) =>
+      trainingApi.startRun(selectedCompanyId!, { skillSlug }),
+    onSuccess: (run) => {
+      setTrainingSkill(null);
+      queryClient.invalidateQueries({ queryKey: queryKeys.training.runs(selectedCompanyId!) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.training.skillHealth(selectedCompanyId!) });
+      navigate(`/pipelines/training/${run.id}`);
+    },
+  });
 
   useEffect(() => {
     setBreadcrumbs([
@@ -166,6 +179,20 @@ export function SkillHealth() {
                     {skill.lastTrainedAt ? `Last: ${relativeTime(skill.lastTrainedAt)}` : "Never trained"}
                   </span>
                 </div>
+
+                <button
+                  className="w-full mt-1 flex items-center justify-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent transition-colors disabled:opacity-50"
+                  disabled={startTraining.isPending}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    startTraining.mutate(skill.skillSlug);
+                  }}
+                >
+                  <Dumbbell className="h-3 w-3" />
+                  {startTraining.isPending && trainingSkill === skill.skillSlug
+                    ? "Starting..."
+                    : "Train This Skill"}
+                </button>
               </CardContent>
             </Card>
           ))}

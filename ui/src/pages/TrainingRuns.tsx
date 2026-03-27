@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@/lib/router";
 import {
   Ban,
@@ -62,6 +62,20 @@ export function TrainingRuns() {
   const { selectedCompanyId } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [showStartDialog, setShowStartDialog] = useState(false);
+  const [skillInput, setSkillInput] = useState("");
+
+  const startTraining = useMutation({
+    mutationFn: (skillSlug: string) =>
+      trainingApi.startRun(selectedCompanyId!, { skillSlug }),
+    onSuccess: (run) => {
+      setShowStartDialog(false);
+      setSkillInput("");
+      queryClient.invalidateQueries({ queryKey: queryKeys.training.runs(selectedCompanyId!) });
+      navigate(`/pipelines/training/${run.id}`);
+    },
+  });
 
   useEffect(() => {
     setBreadcrumbs([
@@ -88,12 +102,66 @@ export function TrainingRuns() {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Training Runs</h1>
-        <p className="text-sm text-muted-foreground">
-          Skill distillation sessions. Each run improves a skill via Generator/Evaluator iterations.
-        </p>
+      <div className="flex items-start justify-between">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold tracking-tight">Training Runs</h1>
+          <p className="text-sm text-muted-foreground">
+            Skill distillation sessions. Each run improves a skill via Generator/Evaluator iterations.
+          </p>
+        </div>
+        <button
+          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+          onClick={() => setShowStartDialog(true)}
+        >
+          <Dumbbell className="h-3.5 w-3.5" />
+          Start Training
+        </button>
       </div>
+
+      {showStartDialog && (
+        <Card>
+          <CardContent className="pt-5 space-y-3">
+            <h3 className="text-sm font-medium">Start a new training run</h3>
+            <p className="text-xs text-muted-foreground">
+              Enter the skill slug to train. The Generator/Evaluator loop will run automatically.
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                className="flex-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                placeholder="e.g. frontend-design, vibe-marketing, spec-handoff"
+                value={skillInput}
+                onChange={(e) => setSkillInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && skillInput.trim()) {
+                    startTraining.mutate(skillInput.trim());
+                  }
+                }}
+                autoFocus
+              />
+              <button
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+                disabled={!skillInput.trim() || startTraining.isPending}
+                onClick={() => startTraining.mutate(skillInput.trim())}
+              >
+                <Play className="h-3 w-3" />
+                {startTraining.isPending ? "Starting..." : "Train"}
+              </button>
+              <button
+                className="rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-accent transition-colors"
+                onClick={() => { setShowStartDialog(false); setSkillInput(""); }}
+              >
+                Cancel
+              </button>
+            </div>
+            {startTraining.isError && (
+              <p className="text-xs text-destructive">
+                {startTraining.error instanceof Error ? startTraining.error.message : "Failed to start training"}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {error ? (
         <Card>

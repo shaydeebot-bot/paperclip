@@ -48,22 +48,19 @@ export function PipelineEval() {
     [runs],
   );
 
-  const runDetailQueries = completedRuns.map((r) =>
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    useQuery({
-      queryKey: queryKeys.pipelines.runDetail(r.id),
-      queryFn: () => pipelinesApi.getRun(r.id),
-      enabled: !!r.id,
-      staleTime: 60_000,
-    }),
-  );
+  const completedRunIds = useMemo(() => completedRuns.map((r) => r.id), [completedRuns]);
+  const { data: runDetails, isLoading: detailsLoading } = useQuery({
+    queryKey: [...queryKeys.pipelines.runs(selectedCompanyId!), "eval-details", ...completedRunIds],
+    queryFn: () => Promise.all(completedRunIds.map((id) => pipelinesApi.getRun(id))),
+    enabled: completedRunIds.length > 0,
+    staleTime: 60_000,
+  });
 
   // Build score trends per phase
   const scoreTrends = useMemo(() => {
     const phaseScores = new Map<string, Array<{ runId: string; score: number; timestamp: string }>>();
 
-    for (const q of runDetailQueries) {
-      const run = q.data;
+    for (const run of runDetails ?? []) {
       if (!run?.phases) continue;
       for (const phase of run.phases) {
         if (phase.scores?._total == null) continue;
@@ -91,7 +88,7 @@ export function PipelineEval() {
     }
 
     return trends.sort((a, b) => a.phaseKey.localeCompare(b.phaseKey));
-  }, [runDetailQueries.map((q) => q.data).filter(Boolean).length]);
+  }, [runDetails]);
 
   // Collect eval results from runs that have them
   const evalPatterns = useMemo(() => {
@@ -99,8 +96,7 @@ export function PipelineEval() {
     const improvements: Array<{ category: string; scores: number[] }> = [];
     const candidates: Array<{ skill: string; agent: string; reason: string }> = [];
 
-    for (const q of runDetailQueries) {
-      const run = q.data;
+    for (const run of runDetails ?? []) {
       if (!run?.evalResults?.patterns) continue;
       const patterns = run.evalResults.patterns;
 
@@ -132,7 +128,7 @@ export function PipelineEval() {
     const uniqueCandidates = [...new Map(candidates.map((c) => [`${c.skill}:${c.agent}`, c])).values()];
 
     return { weaknesses: uniqueWeaknesses, improvements: uniqueImprovements, candidates: uniqueCandidates };
-  }, [runDetailQueries.map((q) => q.data).filter(Boolean).length]);
+  }, [runDetails]);
 
   if (!selectedCompanyId) {
     return <EmptyState icon={BarChart3} message="Select a company to view eval dashboard." />;
@@ -142,7 +138,7 @@ export function PipelineEval() {
     return <PageSkeleton variant="dashboard" />;
   }
 
-  const anyLoading = runDetailQueries.some((q) => q.isLoading);
+  const anyLoading = detailsLoading;
   const avgLatestScore = scoreTrends.length > 0
     ? Math.round(scoreTrends.reduce((sum, t) => sum + t.latestScore, 0) / scoreTrends.length)
     : null;

@@ -45,27 +45,24 @@ export function PipelineQA() {
     enabled: !!selectedCompanyId,
   });
 
-  // Fetch all run details to get phases
+  // Fetch all run details in a single derived query
   const runIds = useMemo(() => (runs ?? []).slice(0, 20).map((r) => r.id), [runs]);
-  const runDetailQueries = runIds.map((id) =>
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    useQuery({
-      queryKey: queryKeys.pipelines.runDetail(id),
-      queryFn: () => pipelinesApi.getRun(id),
-      enabled: !!id,
-      staleTime: 60_000,
-    }),
-  );
+  const { data: runDetails, isLoading: detailsLoading } = useQuery({
+    queryKey: [...queryKeys.pipelines.runs(selectedCompanyId!), "details", ...runIds],
+    queryFn: () => Promise.all(runIds.map((id) => pipelinesApi.getRun(id))),
+    enabled: runIds.length > 0,
+    staleTime: 60_000,
+  });
 
   const allPhases = useMemo(() => {
     const phases: PipelinePhase[] = [];
-    for (const q of runDetailQueries) {
-      if (q.data?.phases) {
-        phases.push(...q.data.phases);
+    for (const run of runDetails ?? []) {
+      if (run?.phases) {
+        phases.push(...run.phases);
       }
     }
     return phases;
-  }, [runDetailQueries.map((q) => q.data).filter(Boolean).length]);
+  }, [runDetails]);
 
   // Aggregate by agent role
   const agentStats = useMemo(() => {
@@ -145,7 +142,7 @@ export function PipelineQA() {
     return <PageSkeleton variant="dashboard" />;
   }
 
-  const anyLoading = runDetailQueries.some((q) => q.isLoading);
+  const anyLoading = detailsLoading;
 
   return (
     <div className="space-y-6">
