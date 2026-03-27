@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "@/lib/router";
 import {
   AlertTriangle,
@@ -322,6 +322,14 @@ function PhaseRow({ phase, isCurrentPhase }: { phase: PipelinePhase; isCurrentPh
 export function PipelineRunDetail() {
   const { runId } = useParams<{ runId: string }>();
   const { setBreadcrumbs } = useBreadcrumbs();
+  const queryClient = useQueryClient();
+
+  const cancelRun = useMutation({
+    mutationFn: () => pipelinesApi.cancelRun(runId!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.pipelines.runDetail(runId!) });
+    },
+  });
 
   const { data: run, isLoading, error } = useQuery({
     queryKey: queryKeys.pipelines.runDetail(runId!),
@@ -390,6 +398,16 @@ export function PipelineRunDetail() {
             {run.name ?? `Run ${run.id.slice(0, 8)}`}
           </h1>
           <StatusBadge status={run.status} />
+          {(run.status === "running" || run.status === "pending") && (
+            <button
+              className="inline-flex items-center gap-1.5 rounded-md border border-red-300 dark:border-red-800 px-2.5 py-1 text-xs font-medium text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 transition-colors disabled:opacity-50"
+              disabled={cancelRun.isPending}
+              onClick={() => cancelRun.mutate()}
+            >
+              <Ban className="h-3 w-3" />
+              {cancelRun.isPending ? "Cancelling..." : "Cancel Run"}
+            </button>
+          )}
         </div>
         {run.error && (
           <p className="text-sm text-destructive flex items-center gap-1.5">
