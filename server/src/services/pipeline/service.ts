@@ -45,7 +45,7 @@ interface PipelinePhaseDefinition {
     issueOnScoreBelow?: number;
   };
 }
-import { verifySkillGate, buildSkillGateRetryTask, parseUsedSkills } from "./skill-gate.js";
+import { verifySkillGate, buildSkillGateRetryTask, parseUsedSkills, getMandatorySkills } from "./skill-gate.js";
 import { generateSkillPlan, formatSkillPromptSection } from "./skill-planner.js";
 import {
   parseReflectorScores,
@@ -435,7 +435,26 @@ export function pipelineService(db: Db) {
     const qaThreshold = phase.qaThreshold ?? template.defaultQaThreshold;
     const maxRetries = phaseDef?.maxRetries ?? template.defaultMaxRetries;
     const totalScore = scores._total ?? 0;
-    const qaPassed = skillGateResult.ok && totalScore >= qaThreshold;
+
+    // If qaThreshold is 0 and no mandatory skills exist for this phase, auto-pass
+    const mandatorySkills = getMandatorySkills(
+      phase.phaseKey,
+      skillPlan ? { [phase.phaseKey]: agentPlan ?? { required: [], recommended: [] } } : null,
+    );
+    const enforceableSkills = mandatorySkills.filter((s) => s.condition === "always");
+    const skillGateEnabled = qaThreshold > 0 || enforceableSkills.length > 0;
+
+    // QA pass logic:
+    // - If skill gate is disabled (no threshold, no enforceable skills): auto-pass
+    // - If score meets threshold: pass (score trumps missing blocks)
+    // - If score is below threshold: skill gate must also be ok
+    // - If no score (0) and skill gate fails: fail
+    const scorePassesThreshold = totalScore >= qaThreshold;
+    const qaPassed = !skillGateEnabled
+      ? true
+      : scorePassesThreshold
+        ? true
+        : skillGateResult.ok; // no score — rely on skill gate alone
     const now = new Date();
     const durationMs = phase.startedAt
       ? now.getTime() - new Date(phase.startedAt).getTime()
@@ -477,11 +496,25 @@ export function pipelineService(db: Db) {
     if (!qaPassed && phase.attempt < maxRetries + 1) {
       retry = true;
 
+      // Get the first-attempt task prompt so retry messages don't recursively stack
+      const [firstAttemptPhase] = await db
+        .select({ taskPrompt: pipelinePhases.taskPrompt })
+        .from(pipelinePhases)
+        .where(
+          and(
+            eq(pipelinePhases.runId, phase.runId),
+            eq(pipelinePhases.phaseKey, phase.phaseKey),
+          ),
+        )
+        .orderBy(asc(pipelinePhases.attempt))
+        .limit(1);
+      const originalTaskPrompt = firstAttemptPhase?.taskPrompt ?? phase.taskPrompt ?? "";
+
       // Build retry task
       if (!skillGateResult.ok && skillGateResult.missingSkills.length > 0) {
         retryTask = buildSkillGateRetryTask(
           skillGateResult.missingSkills,
-          phase.taskPrompt ?? "",
+          originalTaskPrompt,
         );
       } else {
         retryTask = [
@@ -493,7 +526,7 @@ export function pipelineService(db: Db) {
           `Please improve your output quality and try again.`,
           ``,
           `Original task (still applies):`,
-          phase.taskPrompt ?? "",
+          originalTaskPrompt,
         ].join("\n");
       }
 

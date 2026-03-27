@@ -80,8 +80,20 @@ export function verifySkillGate(
     reason: null,
   };
 
+  // Check mandatory skills for this agent (static + dynamic)
+  const mandatory = getMandatorySkills(agentRole, skillPlan);
+
   result.hasPlanned = output.includes("SKILLS_PLANNED:");
   result.hasUsed = output.includes("SKILLS_USED:");
+
+  // Only count skills with condition "always" as enforceable
+  const enforceableSkills = mandatory.filter((s) => s.condition === "always");
+
+  // If no enforceable mandatory skills exist, don't require the blocks — auto-pass
+  if (enforceableSkills.length === 0) {
+    result.ok = true;
+    return result;
+  }
 
   if (!result.hasPlanned || !result.hasUsed) {
     result.ok = false;
@@ -95,9 +107,6 @@ export function verifySkillGate(
   // Extract the SKILLS_USED section
   const usedMatch = output.match(/SKILLS_USED:[\s\S]*?(?=\n(?:#{1,3}\s|---|\n\n)|$)/);
   const usedSection = usedMatch ? usedMatch[0] : "";
-
-  // Check mandatory skills for this agent (static + dynamic)
-  const mandatory = getMandatorySkills(agentRole, skillPlan);
 
   for (const { skill, condition } of mandatory) {
     if (condition !== "always") continue; // TODO: condition-based checks

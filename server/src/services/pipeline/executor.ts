@@ -29,6 +29,63 @@ const log = {
     console.error(`[pipeline-executor] ${msg}`, data ? JSON.stringify(data) : ""),
 };
 
+/**
+ * Parse stream-json stdout from Claude to extract the actual agent text.
+ * Stream-json is one JSON object per line. We look for:
+ *   {"type":"result","result":"..."} — the final result text
+ *   {"type":"assistant","message":{"content":[{"type":"text","text":"..."}]}} — assistant text blocks
+ * Falls back to raw output if parsing finds nothing.
+ */
+function extractAgentText(rawOutput: string): string {
+  if (!rawOutput) return "";
+
+  const assistantTexts: string[] = [];
+  let resultText = "";
+
+  for (const rawLine of rawOutput.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    let event: Record<string, unknown>;
+    try {
+      event = JSON.parse(line);
+    } catch {
+      // Not JSON — might be plain text output, accumulate it
+      continue;
+    }
+
+    if (typeof event !== "object" || event === null) continue;
+
+    const type = String(event.type ?? "");
+
+    if (type === "result" && typeof event.result === "string") {
+      resultText = event.result;
+      continue;
+    }
+
+    if (type === "assistant") {
+      const message = event.message as Record<string, unknown> | undefined;
+      const content = Array.isArray(message?.content) ? message.content : [];
+      for (const entry of content) {
+        if (typeof entry === "object" && entry !== null && !Array.isArray(entry)) {
+          const block = entry as Record<string, unknown>;
+          if (block.type === "text" && typeof block.text === "string" && block.text) {
+            assistantTexts.push(block.text);
+          }
+        }
+      }
+      continue;
+    }
+  }
+
+  // Prefer result text (final summary), fall back to concatenated assistant texts
+  if (resultText) return resultText;
+  if (assistantTexts.length > 0) return assistantTexts.join("\n\n");
+
+  // Nothing parsed — return raw output (might not be stream-json)
+  return rawOutput;
+}
+
 interface PhaseExecutionResult {
   phaseKey: string;
   phaseId: string;
@@ -210,7 +267,9 @@ export function pipelineExecutor(db: Db) {
           name: string;
           agentRole: string;
           agentId?: string;
+          dependsOn: string[];
           skills: { required: string[]; recommended: string[] };
+          qaThreshold?: number;
         }>;
         const phaseDef = phaseDefs.find((d) => d.key === phaseKey);
         if (!phaseDef) {
@@ -260,8 +319,8 @@ export function pipelineExecutor(db: Db) {
           error: execResult.error,
         });
 
-        // Feed the output to completePhase for skill gate verification
-        const agentOutput = execResult.output || execResult.error || "No output captured";
+        // Parse stream-json output to extract agent result text
+        const agentOutput = extractAgentText(execResult.output) || execResult.error || "No output captured";
         const completion = await svc.completePhase(phase.id, agentOutput);
 
         results.push({
@@ -300,11 +359,19 @@ export function pipelineExecutor(db: Db) {
   /**
    * Build the task prompt for a pipeline phase.
    * Combines the input context, skill plan, and phase-specific instructions.
+   * For reflector phases (key starts with "reflect-"), injects the dependency
+   * phase output and scoring instructions.
    */
   async function buildPhaseTaskPrompt(
     run: Record<string, unknown>,
     phase: Record<string, unknown>,
-    phaseDef: { key: string; name: string; agentRole: string },
+    phaseDef: {
+      key: string;
+      name: string;
+      agentRole: string;
+      dependsOn?: string[];
+      qaThreshold?: number;
+    },
   ): Promise<string> {
     // Use existing task prompt if set (e.g., retry with enhanced instructions)
     if (phase.taskPrompt && typeof phase.taskPrompt === "string") {
@@ -313,6 +380,7 @@ export function pipelineExecutor(db: Db) {
 
     const inputContext = (run.inputContext as Record<string, string>) ?? {};
     const runId = run.id as string;
+    const isReflector = phaseDef.key.startsWith("reflect-");
 
     // Get skill prompt section
     const skillPrompt = await svc.getSkillPromptForPhase(runId, phaseDef.key);
@@ -340,21 +408,114 @@ export function pipelineExecutor(db: Db) {
       sections.push(`## Task`, ``, inputContext.task, ``);
     }
 
+    // For reflector phases, inject dependency outputs and scoring instructions
+    if (isReflector && phaseDef.dependsOn && phaseDef.dependsOn.length > 0) {
+      const depOutputs = await getDependencyOutputs(runId, phaseDef.dependsOn);
+      if (depOutputs.length > 0) {
+        sections.push(`## Content to Review`, ``);
+        for (const dep of depOutputs) {
+          sections.push(
+            `### Output from phase: ${dep.phaseKey}`,
+            ``,
+            dep.output,
+            ``,
+          );
+        }
+      }
+
+      const qaThreshold = phaseDef.qaThreshold ?? 60;
+      const reviewType = phaseDef.key.includes("copy")
+        ? "copy and content quality"
+        : phaseDef.key.includes("code")
+          ? "code quality, correctness, and best practices"
+          : "overall project coherence and completeness";
+
+      sections.push(
+        `## Review Instructions`,
+        ``,
+        `You are a quality reviewer. Your job is to evaluate the output above for ${reviewType}.`,
+        ``,
+        `You MUST produce a scored review. Score each category from 0-100 and provide a total.`,
+        `The QA threshold is ${qaThreshold}/100 — the phase passes only if the total score meets this threshold.`,
+        ``,
+        `Output your scores in this exact markdown table format:`,
+        ``,
+        `| Category | Score |`,
+        `|----------|-------|`,
+        `| Clarity | 85 |`,
+        `| Accuracy | 90 |`,
+        `| Completeness | 75 |`,
+        `| ... | ... |`,
+        ``,
+        `**Total: XX/100**`,
+        ``,
+        `After the scores, provide specific feedback on what could be improved.`,
+        ``,
+      );
+    }
+
     // Add skill plan
     if (skillPrompt) {
       sections.push(`## Required Skills`, ``, skillPrompt, ``);
     }
 
-    // Add completion signal instruction
+    // Add skill tracking instructions
     sections.push(
+      `## Skill Tracking`,
+      ``,
+      `Before starting work, output a SKILLS_PLANNED section listing which skills you will use.`,
+      `After completing work, output a SKILLS_USED section listing which skills you actually used.`,
+      ``,
+      `Format:`,
+      ``,
+      `SKILLS_PLANNED:`,
+      `- [x] skill-name — reason for using this skill`,
+      `- [ ] skill-name — not applicable because...`,
+      ``,
+      `SKILLS_USED:`,
+      `- [x] skill-name — how you used it`,
+      `- [ ] skill-name — why you skipped it`,
+      ``,
       `## Completion`,
       ``,
       `When you have completed your work, output a summary of what you accomplished.`,
-      `Include SKILLS_USED: [list of skills you invoked] in your output.`,
       ``,
     );
 
     return sections.join("\n");
+  }
+
+  /**
+   * Fetch the output from completed dependency phases.
+   * Used to feed previous phase output into reflector/reviewer phases.
+   */
+  async function getDependencyOutputs(
+    runId: string,
+    dependsOn: string[],
+  ): Promise<Array<{ phaseKey: string; output: string }>> {
+    const runData = await svc.getRunWithPhases(runId);
+    if (!runData) return [];
+
+    const results: Array<{ phaseKey: string; output: string }> = [];
+    for (const depKey of dependsOn) {
+      // Find the latest passed attempt for this dependency
+      const depPhase = runData.phases
+        .filter((p: { phaseKey: string; status: string }) =>
+          p.phaseKey === depKey && p.status === "passed",
+        )
+        .sort((a: { attempt: number }, b: { attempt: number }) =>
+          b.attempt - a.attempt,
+        )[0];
+
+      if (depPhase?.agentOutput) {
+        // Truncate very long outputs to avoid blowing up context
+        const output = typeof depPhase.agentOutput === "string"
+          ? depPhase.agentOutput.substring(0, 15000)
+          : String(depPhase.agentOutput).substring(0, 15000);
+        results.push({ phaseKey: depKey, output });
+      }
+    }
+    return results;
   }
 
   return {
