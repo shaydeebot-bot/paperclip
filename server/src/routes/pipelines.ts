@@ -135,8 +135,13 @@ export function pipelineRoutes(db: Db) {
     assertCompanyAccess(req, companyId);
 
     const limit = parseInt(req.query.limit as string, 10) || 50;
-    const runs = await svc.listRuns(companyId, Math.min(limit, 200));
-    res.json(runs);
+    try {
+      const runs = await svc.listRuns(companyId, Math.min(limit, 200));
+      res.json(runs);
+    } catch (err: unknown) {
+      console.error("pipeline-runs list error:", err);
+      res.status(500).json({ error: "Failed to list pipeline runs", detail: String(err) });
+    }
   });
 
   // GET /api/pipeline-runs/:id

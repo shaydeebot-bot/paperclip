@@ -415,8 +415,9 @@ export function pipelineService(db: Db) {
     const phaseDef = (template.phases as PipelinePhaseDefinition[])
       .find((p) => p.key === phase.phaseKey);
 
-    // Extract skill plan from the run
-    const skillPlan = run.skillPlan as Record<string, { required?: string[]; recommended?: string[] }> | null;
+    // Extract skill plan from the run (stored as { generatedAt, plan: { <phaseKey>: AgentSkillPlan }, ... })
+    const skillPlanData = run.skillPlan as { plan?: Record<string, { required?: string[]; recommended?: string[] }> } | null;
+    const skillPlan = skillPlanData?.plan ?? null;
     const agentPlan = skillPlan?.[phase.phaseKey] ?? null;
 
     // Verify skill gate
@@ -692,8 +693,10 @@ export function pipelineService(db: Db) {
     if (!run) throw new Error("Run not found");
 
     const ctx = run.inputContext as Record<string, string>;
+    // Combine specContent with task field so signal patterns match on both
+    const specWithTask = [ctx.specContent ?? "", ctx.task ?? ""].filter(Boolean).join("\n");
     const plan = generateSkillPlan(
-      ctx.specContent ?? "",
+      specWithTask,
       ctx.ideaContent ?? "",
       ctx.brandContent ?? "",
     );

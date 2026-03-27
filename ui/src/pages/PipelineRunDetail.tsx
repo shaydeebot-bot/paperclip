@@ -8,6 +8,7 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
+  FileText,
   Play,
   RefreshCcw,
   Shield,
@@ -133,6 +134,34 @@ function ScoresDisplay({ scores }: { scores: Record<string, number> }) {
 }
 
 // ---------------------------------------------------------------------------
+// Agent output viewer (expandable, shows full output)
+// ---------------------------------------------------------------------------
+
+function AgentOutputViewer({ output }: { output: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const charCount = output.length.toLocaleString();
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1 hover:text-foreground transition-colors"
+      >
+        {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+        <FileText className="h-3 w-3" />
+        Agent Output ({charCount} chars)
+      </button>
+      {expanded && (
+        <pre className="max-h-[600px] overflow-auto rounded border border-border bg-background p-3 text-xs whitespace-pre-wrap break-words">
+          {output}
+        </pre>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Phase row (expandable)
 // ---------------------------------------------------------------------------
 
@@ -199,6 +228,13 @@ function PhaseRow({ phase, isCurrentPhase }: { phase: PipelinePhase; isCurrentPh
               <Timer className="h-3 w-3" /> {duration}
             </span>
           )}
+
+          {/* Output length hint */}
+          {phase.agentOutput && (
+            <span className="text-xs text-muted-foreground tabular-nums flex items-center gap-1">
+              <FileText className="h-3 w-3" /> {phase.agentOutput.length.toLocaleString()} chars
+            </span>
+          )}
         </div>
       </CollapsibleTrigger>
 
@@ -263,18 +299,9 @@ function PhaseRow({ phase, isCurrentPhase }: { phase: PipelinePhase; isCurrentPh
             </div>
           )}
 
-          {/* Agent output (truncated) */}
+          {/* Agent output — expandable */}
           {phase.agentOutput && (
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1">
-                Agent Output
-              </p>
-              <pre className="max-h-48 overflow-auto rounded border border-border bg-background p-3 text-xs whitespace-pre-wrap">
-                {phase.agentOutput.length > 2000
-                  ? `${phase.agentOutput.slice(0, 2000)}...\n\n[Truncated — ${phase.agentOutput.length.toLocaleString()} chars total]`
-                  : phase.agentOutput}
-              </pre>
-            </div>
+            <AgentOutputViewer output={phase.agentOutput} />
           )}
 
           {/* Timestamps */}

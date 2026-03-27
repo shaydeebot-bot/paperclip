@@ -233,6 +233,20 @@ export function pipelineExecutor(db: Db) {
 
     log.info("Starting pipeline execution", { runId });
 
+    // Generate and persist the dynamic skill plan before executing any phases
+    try {
+      const skillResult = await svc.planSkills(runId);
+      log.info("Skill plan generated", {
+        runId,
+        signals: skillResult.matchedSignals,
+        required: skillResult.stats.totalRequired,
+        recommended: skillResult.stats.totalRecommended,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.error(`Skill planning failed (continuing without): ${msg}`, { runId });
+    }
+
     // First, advance to get the initial ready phases
     let readyKeys = await svc.advanceRun(runId);
 
