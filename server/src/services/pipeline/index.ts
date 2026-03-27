@@ -1,4 +1,5 @@
 export { pipelineService } from "./service.js";
+export { pipelineExecutor } from "./executor.js";
 export { verifySkillGate, buildSkillGateRetryTask, parseUsedSkills, MANDATORY_SKILLS } from "./skill-gate.js";
 export { generateSkillPlan, formatSkillPromptSection, SIGNALS } from "./skill-planner.js";
 export { parseReflectorScores, detectPatterns, adjustThresholds } from "./eval.js";

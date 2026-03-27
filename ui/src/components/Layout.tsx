@@ -71,7 +71,9 @@ export function Layout() {
   const matchedCompany = useMemo(() => {
     if (!companyPrefix) return null;
     const requestedPrefix = companyPrefix.toUpperCase();
-    return companies.find((company) => company.issuePrefix.toUpperCase() === requestedPrefix) ?? null;
+    return companies.find((company) =>
+      company.issuePrefix.toUpperCase() === requestedPrefix && company.status !== "archived"
+    ) ?? null;
   }, [companies, companyPrefix]);
   const hasUnknownCompanyPrefix =
     Boolean(companyPrefix) && !companiesLoading && companies.length > 0 && !matchedCompany;

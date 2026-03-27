@@ -28,6 +28,13 @@ export function PipelineTemplateDetail() {
     enabled: !!templateId,
   });
 
+  // Build a dependency graph to show execution order
+  // Must be before conditional returns to satisfy Rules of Hooks
+  const phasesByKey = useMemo(
+    () => new Map((template?.phases ?? []).map((p) => [p.key, p])),
+    [template?.phases],
+  );
+
   useEffect(() => {
     setBreadcrumbs([
       { label: "Pipelines", href: "/pipelines/templates" },
@@ -48,12 +55,6 @@ export function PipelineTemplateDetail() {
       />
     );
   }
-
-  // Build a dependency graph to show execution order
-  const phasesByKey = useMemo(
-    () => new Map(template.phases.map((p) => [p.key, p])),
-    [template.phases],
-  );
 
   return (
     <div className="space-y-6">

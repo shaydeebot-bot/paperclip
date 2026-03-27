@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import type { Db } from "@paperclipai/db";
 import { validate } from "../middleware/validate.js";
-import { pipelineService } from "../services/pipeline/index.js";
+import { pipelineService, pipelineExecutor } from "../services/pipeline/index.js";
 import { assertBoard, assertCompanyAccess } from "./authz.js";
 
 // ── Validation Schemas ───────────────────────────────────────────────────────
@@ -196,6 +196,34 @@ export function pipelineRoutes(db: Db) {
 
     const plan = await svc.planSkills(run.id);
     res.json(plan);
+  });
+
+  // POST /api/pipeline-runs/:id/execute
+  // Kicks off actual agent execution for the pipeline run.
+  // This is the bridge between the pipeline state machine and the adapter system.
+  router.post("/pipeline-runs/:id/execute", async (req, res) => {
+    assertBoard(req);
+
+    const run = await svc.getRun(req.params.id as string);
+    if (!run) {
+      res.status(404).json({ error: "Run not found" });
+      return;
+    }
+    assertCompanyAccess(req, run.companyId);
+
+    if (run.status === "completed" || run.status === "failed" || run.status === "cancelled") {
+      res.status(409).json({ error: `Run is already ${run.status}` });
+      return;
+    }
+
+    // Start execution in the background and return immediately
+    const executor = pipelineExecutor(db);
+    res.status(202).json({ status: "executing", runId: run.id });
+
+    // Execute asynchronously
+    executor.executeRun(run.id).catch((err) => {
+      console.error(`[pipeline-executor] Run ${run.id} failed:`, err);
+    });
   });
 
   // ── Phases ───────────────────────────────────────────────────────────────

@@ -50,10 +50,24 @@ async function buildSkillsDir(config: Record<string, unknown>): Promise<string> 
   );
   for (const entry of availableEntries) {
     if (!desiredNames.has(entry.key)) continue;
-    await fs.symlink(
-      entry.source,
-      path.join(target, entry.runtimeName),
-    );
+    try {
+      await fs.symlink(
+        entry.source,
+        path.join(target, entry.runtimeName),
+      );
+    } catch (symlinkErr) {
+      // Windows EPERM fallback: copy instead of symlink
+      if ((symlinkErr as NodeJS.ErrnoException).code === "EPERM") {
+        const stat = await fs.stat(entry.source);
+        if (stat.isDirectory()) {
+          await fs.cp(entry.source, path.join(target, entry.runtimeName), { recursive: true });
+        } else {
+          await fs.copyFile(entry.source, path.join(target, entry.runtimeName));
+        }
+      } else {
+        throw symlinkErr;
+      }
+    }
   }
   return tmp;
 }
