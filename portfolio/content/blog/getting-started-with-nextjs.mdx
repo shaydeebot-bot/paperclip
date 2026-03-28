@@ -1,0 +1,95 @@
+---
+title: "Getting Started with Next.js 14: A Practical Guide"
+date: "2024-03-15"
+excerpt: "Everything you need to know to start building with Next.js 14's App Router, from project setup to deployment."
+tags: ["Next.js", "React", "Tutorial"]
+published: true
+---
+
+Next.js 14 represents a significant step forward for React development. The App Router, now stable and battle-tested, fundamentally changes how we think about building web applications. In this guide, I'll walk you through the essentials.
+
+## Why Next.js 14?
+
+The App Router brings several game-changing features:
+
+- **Server Components by default** — less JavaScript shipped to the client
+- **Nested layouts** — share UI between routes without re-rendering
+- **Streaming** — progressive rendering for faster perceived performance
+- **Built-in SEO** — the Metadata API makes search optimization straightforward
+
+## Setting Up Your Project
+
+Getting started is as simple as running:
+
+```bash
+npx create-next-app@latest my-app --typescript --tailwind --app
+```
+
+This gives you a TypeScript project with Tailwind CSS and the App Router pre-configured. The file structure is clean and intuitive:
+
+```
+app/
+  layout.tsx    # Root layout
+  page.tsx      # Home page
+  globals.css   # Global styles
+```
+
+## Understanding the App Router
+
+The key mental model shift is this: every folder in `app/` is a route segment, and every `page.tsx` is a route endpoint. Layouts wrap their children and persist across navigations.
+
+```tsx
+// app/layout.tsx
+export default function RootLayout({ children }) {
+  return (
+    <html lang="en">
+      <body>{children}</body>
+    </html>
+  )
+}
+```
+
+This layout wraps every page in your application. You can nest layouts in subdirectories for route-specific UI.
+
+## Server vs. Client Components
+
+By default, all components in the App Router are Server Components. They run on the server, have zero client-side JavaScript, and can directly access databases and APIs.
+
+When you need interactivity — event handlers, state, effects — add the `'use client'` directive:
+
+```tsx
+'use client'
+
+import { useState } from 'react'
+
+export default function Counter() {
+  const [count, setCount] = useState(0)
+  return <button onClick={() => setCount(count + 1)}>{count}</button>
+}
+```
+
+The key insight: push `'use client'` as far down the component tree as possible. Keep the majority of your UI as Server Components.
+
+## Data Fetching
+
+Data fetching in the App Router is beautifully simple. Just make your components async:
+
+```tsx
+async function BlogPosts() {
+  const posts = await db.posts.findMany()
+  return posts.map(post => <PostCard key={post.id} post={post} />)
+}
+```
+
+No `getServerSideProps`, no `getStaticProps`. Just fetch data where you need it.
+
+## What's Next?
+
+This barely scratches the surface. In upcoming posts, I'll cover:
+
+- Route Handlers for API endpoints
+- Server Actions for form mutations
+- Caching and revalidation strategies
+- Deploying to Vercel with environment variables
+
+The Next.js ecosystem is moving fast, and the developer experience has never been better. If you're starting a new React project, there's never been a better time to choose Next.js.

@@ -1,0 +1,121 @@
+---
+title: "Building Accessible Forms That Don't Suck"
+date: "2024-02-28"
+excerpt: "A deep dive into creating forms that are usable by everyone — proper labels, error handling, keyboard navigation, and ARIA patterns."
+tags: ["Accessibility", "HTML", "UX"]
+published: true
+---
+
+Forms are where most web accessibility failures happen. A screen reader user hits your contact form and gets a wall of unlabeled inputs. A keyboard user tabs through your multi-step wizard and gets trapped. Someone with low vision can't tell which field has an error.
+
+Let's fix that.
+
+## The Foundation: Semantic HTML
+
+Before reaching for ARIA attributes, get the HTML right. Native form elements have built-in accessibility that no amount of `div`-with-click-handler can replicate.
+
+```html
+<form>
+  <label for="email">Email address</label>
+  <input
+    type="email"
+    id="email"
+    name="email"
+    required
+    autocomplete="email"
+    aria-describedby="email-hint"
+  />
+  <p id="email-hint">We'll never share your email.</p>
+</form>
+```
+
+This simple pattern gives you:
+
+- **Screen reader announcement**: "Email address, edit text, required"
+- **Click-to-focus**: clicking the label focuses the input
+- **Autocomplete**: browsers can fill this automatically
+- **Validation**: native email validation with `type="email"`
+
+## Error Handling Done Right
+
+Most forms show errors, but few communicate them accessibly. Here's the pattern:
+
+```tsx
+function FormField({ label, error, ...props }) {
+  const id = useId()
+  const errorId = `${id}-error`
+
+  return (
+    <div>
+      <label htmlFor={id}>{label}</label>
+      <input
+        id={id}
+        aria-invalid={!!error}
+        aria-describedby={error ? errorId : undefined}
+        {...props}
+      />
+      {error && (
+        <p id={errorId} role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  )
+}
+```
+
+Key details:
+
+- `aria-invalid` tells assistive tech the field has an error
+- `aria-describedby` links the error message to the input
+- `role="alert"` announces the error immediately when it appears
+
+## Keyboard Navigation
+
+Every interactive element must be reachable and operable via keyboard. This means:
+
+1. **Tab order follows visual order** — don't use `tabindex` values greater than 0
+2. **Focus is visible** — never `outline: none` without a replacement
+3. **Custom widgets follow ARIA patterns** — dropdowns use arrow keys, modals trap focus
+
+For focus styles, I recommend this approach:
+
+```css
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+```
+
+The `:focus-visible` pseudo-class only shows the outline for keyboard navigation, not mouse clicks. Best of both worlds.
+
+## Multi-Step Forms
+
+Long forms benefit from being broken into steps. But this introduces navigation complexity:
+
+- Announce the current step: "Step 2 of 4: Shipping Address"
+- Allow going back without losing data
+- Show a progress indicator that's accessible
+- Move focus to the new step's heading on transition
+
+```tsx
+<div role="group" aria-label={`Step ${step} of ${total}: ${stepTitle}`}>
+  <h2 tabIndex={-1} ref={headingRef}>
+    {stepTitle}
+  </h2>
+  {/* Step content */}
+</div>
+```
+
+Setting `tabIndex={-1}` on the heading allows you to programmatically focus it with `headingRef.current?.focus()` when the step changes.
+
+## Testing Your Forms
+
+The best accessibility test is using your form without a mouse. Tab through every field. Submit with errors. Use a screen reader (VoiceOver on Mac, NVDA on Windows).
+
+Automated tools like axe-core catch about 30% of issues. Manual testing catches the rest. Build both into your workflow.
+
+## The Bottom Line
+
+Accessible forms aren't harder to build — they're just built with more intention. Start with semantic HTML, add ARIA where HTML falls short, test with a keyboard, and listen to what a screen reader announces. Your users will thank you.
