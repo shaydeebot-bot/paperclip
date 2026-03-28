@@ -1,9 +1,28 @@
 import type { Metadata } from 'next'
+import { Syne, Outfit, JetBrains_Mono } from 'next/font/google'
 import { ThemeProvider } from 'next-themes'
 import Navbar from '@/components/layout/Navbar'
 import Footer from '@/components/layout/Footer'
 import { siteConfig } from '@/lib/config'
 import './globals.css'
+
+const syne = Syne({
+  subsets: ['latin'],
+  variable: '--font-syne',
+  display: 'swap',
+})
+
+const outfit = Outfit({
+  subsets: ['latin'],
+  variable: '--font-outfit',
+  display: 'swap',
+})
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  variable: '--font-jetbrains-mono',
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.siteUrl),
@@ -19,7 +38,6 @@ export const metadata: Metadata = {
     siteName: siteConfig.name,
     title: `${siteConfig.name} — ${siteConfig.role}`,
     description: siteConfig.tagline,
-    images: [{ url: '/images/og-default.png', width: 1200, height: 630 }],
   },
   twitter: {
     card: 'summary_large_image',
@@ -27,6 +45,9 @@ export const metadata: Metadata = {
     description: siteConfig.tagline,
   },
   robots: { index: true, follow: true },
+  icons: {
+    icon: '/favicon.svg',
+  },
 }
 
 export default function RootLayout({
@@ -36,7 +57,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="font-body">
+      <body className={`${syne.variable} ${outfit.variable} ${jetbrainsMono.variable} font-body`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <div className="grain-overlay" aria-hidden="true" />
           <a

@@ -17,6 +17,7 @@ export default function ContactForm() {
     email: '',
     subject: '',
     message: '',
+    website: '',
   })
   const [errors, setErrors] = useState<FormErrors>({})
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
@@ -66,7 +67,7 @@ export default function ContactForm() {
       }
 
       setStatus('success')
-      setFormData({ name: '', email: '', subject: '', message: '' })
+      setFormData({ name: '', email: '', subject: '', message: '', website: '' })
     } catch (err) {
       setStatus('error')
       setErrorMessage(
@@ -80,10 +81,18 @@ export default function ContactForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6" noValidate>
-      {/* Honeypot */}
+      {/* Honeypot — bots fill this hidden field; the server rejects submissions that include it */}
       <div className="absolute -left-[9999px]" aria-hidden="true">
         <label htmlFor="website">Website</label>
-        <input type="text" id="website" name="website" tabIndex={-1} autoComplete="off" />
+        <input
+          type="text"
+          id="website"
+          name="website"
+          tabIndex={-1}
+          autoComplete="off"
+          value={formData.website}
+          onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+        />
       </div>
 
       {/* Status messages */}
@@ -197,6 +206,24 @@ export default function ContactForm() {
           </span>
         </div>
       </div>
+
+      <p className="text-xs text-slate-400 dark:text-slate-500 font-body leading-relaxed">
+        By submitting this form you agree that your name, email address, and message will be used
+        to respond to your inquiry and processed via{' '}
+        <a
+          href="https://resend.com/legal/privacy-policy"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+        >
+          Resend
+        </a>{' '}
+        for email delivery. See the{' '}
+        <a href="/privacy" className="underline hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+          Privacy Policy
+        </a>{' '}
+        for details.
+      </p>
 
       <Button type="submit" disabled={status === 'loading'} className="w-full sm:w-auto">
         {status === 'loading' ? (

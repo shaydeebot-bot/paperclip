@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { resend } from '@/lib/resend'
 
+// NOTE: This in-memory rate limiter is reset on every serverless cold start and
+// does not work across concurrent function instances (e.g. Vercel). It provides
+// a best-effort limit in development only. For production, replace with a
+// Redis-backed solution (e.g. Upstash + @upstash/ratelimit).
 const rateLimit = new Map<string, { count: number; resetAt: number }>()
 const RATE_LIMIT_MAX = 3
 const RATE_LIMIT_WINDOW = 15 * 60 * 1000 // 15 minutes
@@ -20,6 +24,15 @@ function isRateLimited(ip: string): boolean {
 
   entry.count++
   return false
+}
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
 }
 
 function validateField(value: string, name: string, min: number, max: number) {
@@ -42,7 +55,12 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { name, email, subject, message } = body
+    const { name, email, subject, message, website } = body
+
+    // Server-side honeypot check — bots that fill hidden fields are rejected
+    if (website) {
+      return NextResponse.json({ success: true, message: 'Message sent successfully' })
+    }
 
     // Validation
     const errors: Record<string, string> = {}
@@ -79,6 +97,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const safeName = escapeHtml(name.trim())
+    const safeEmail = escapeHtml(email.trim())
+    const safeSubject = escapeHtml(subject.trim())
+    const safeMessage = escapeHtml(message.trim())
+
     await resend.emails.send({
       from: 'Portfolio Contact <onboarding@resend.dev>',
       to: contactEmail,
@@ -90,20 +113,20 @@ export async function POST(request: NextRequest) {
           <table style="width: 100%; border-collapse: collapse;">
             <tr>
               <td style="padding: 8px 0; color: #64748b; width: 100px;">Name</td>
-              <td style="padding: 8px 0; color: #1e293b; font-weight: 500;">${name.trim()}</td>
+              <td style="padding: 8px 0; color: #1e293b; font-weight: 500;">${safeName}</td>
             </tr>
             <tr>
               <td style="padding: 8px 0; color: #64748b;">Email</td>
-              <td style="padding: 8px 0;"><a href="mailto:${email.trim()}" style="color: #6366f1;">${email.trim()}</a></td>
+              <td style="padding: 8px 0;"><a href="mailto:${safeEmail}" style="color: #6366f1;">${safeEmail}</a></td>
             </tr>
             <tr>
               <td style="padding: 8px 0; color: #64748b;">Subject</td>
-              <td style="padding: 8px 0; color: #1e293b;">${subject.trim()}</td>
+              <td style="padding: 8px 0; color: #1e293b;">${safeSubject}</td>
             </tr>
           </table>
           <div style="margin-top: 16px; padding: 16px; background: #f8fafc; border-radius: 8px;">
             <p style="color: #64748b; font-size: 12px; margin: 0 0 8px;">Message</p>
-            <p style="color: #1e293b; line-height: 1.6; margin: 0; white-space: pre-wrap;">${message.trim()}</p>
+            <p style="color: #1e293b; line-height: 1.6; margin: 0; white-space: pre-wrap;">${safeMessage}</p>
           </div>
           <p style="margin-top: 16px; color: #94a3b8; font-size: 12px;">
             Sent from portfolio contact form at ${new Date().toISOString()}

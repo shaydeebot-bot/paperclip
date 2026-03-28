@@ -29,9 +29,9 @@ const config: Config = {
         },
       },
       fontFamily: {
-        display: ['Syne', 'system-ui', 'sans-serif'],
-        body: ['Outfit', 'system-ui', 'sans-serif'],
-        mono: ['JetBrains Mono', 'monospace'],
+        display: ['var(--font-syne)', 'system-ui', 'sans-serif'],
+        body: ['var(--font-outfit)', 'system-ui', 'sans-serif'],
+        mono: ['var(--font-jetbrains-mono)', 'monospace'],
       },
       borderRadius: {
         card: '16px',
