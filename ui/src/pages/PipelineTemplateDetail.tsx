@@ -1,26 +1,35 @@
-import { useEffect, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useParams } from "@/lib/router";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useParams, useNavigate } from "@/lib/router";
 import {
   ArrowRight,
   CheckCircle2,
   Layers,
+  Play,
   RefreshCcw,
   Shield,
   User,
   Zap,
 } from "lucide-react";
 import { pipelinesApi } from "../api/pipelines";
+import { useCompany } from "../context/CompanyContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { queryKeys } from "../lib/queryKeys";
 import { EmptyState } from "../components/EmptyState";
 import { PageSkeleton } from "../components/PageSkeleton";
+import { Card, CardContent } from "@/components/ui/card";
 import { formatDate } from "../lib/utils";
 import { cn } from "../lib/utils";
 
 export function PipelineTemplateDetail() {
   const { templateId } = useParams<{ templateId: string }>();
+  const { selectedCompanyId } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [showRunDialog, setShowRunDialog] = useState(false);
+  const [runName, setRunName] = useState("");
+  const [inputContext, setInputContext] = useState("");
 
   const { data: template, isLoading, error } = useQuery({
     queryKey: queryKeys.pipelines.templateDetail(templateId!),
@@ -34,6 +43,27 @@ export function PipelineTemplateDetail() {
     () => new Map((template?.phases ?? []).map((p) => [p.key, p])),
     [template?.phases],
   );
+
+  const startRun = useMutation({
+    mutationFn: async () => {
+      const name = runName.trim() || `${template?.name} — ${new Date().toLocaleString()}`;
+      const run = await pipelinesApi.startRun(selectedCompanyId!, {
+        templateId: templateId!,
+        name,
+        inputContext: inputContext.trim() ? { task: inputContext.trim() } : undefined,
+        triggerSource: "ui",
+      });
+      await pipelinesApi.executeRun(run.id);
+      return run;
+    },
+    onSuccess: (run) => {
+      setShowRunDialog(false);
+      setRunName("");
+      setInputContext("");
+      queryClient.invalidateQueries({ queryKey: queryKeys.pipelines.runs(selectedCompanyId!) });
+      navigate(`/pipelines/runs/${run.id}`);
+    },
+  });
 
   useEffect(() => {
     setBreadcrumbs([
@@ -58,18 +88,78 @@ export function PipelineTemplateDetail() {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">{template.name}</h1>
-        {template.description && (
-          <p className="text-sm text-muted-foreground">{template.description}</p>
-        )}
-        <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground pt-1">
-          <span>Slug: <code>{template.slug}</code></span>
-          <span>QA Threshold: {template.defaultQaThreshold}%</span>
-          <span>Max Retries: {template.defaultMaxRetries}</span>
-          <span>Created: {formatDate(template.createdAt)}</span>
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold tracking-tight">{template.name}</h1>
+          {template.description && (
+            <p className="text-sm text-muted-foreground">{template.description}</p>
+          )}
+          <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground pt-1">
+            <span>Slug: <code>{template.slug}</code></span>
+            <span>QA Threshold: {template.defaultQaThreshold}%</span>
+            <span>Max Retries: {template.defaultMaxRetries}</span>
+            <span>Created: {formatDate(template.createdAt)}</span>
+          </div>
         </div>
+        <button
+          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors shrink-0"
+          onClick={() => setShowRunDialog(true)}
+        >
+          <Play className="h-3.5 w-3.5" />
+          Start Run
+        </button>
       </div>
+
+      {showRunDialog && (
+        <Card>
+          <CardContent className="pt-5 space-y-3">
+            <h3 className="text-sm font-medium">Start a new pipeline run</h3>
+            <p className="text-xs text-muted-foreground">
+              Give this run a name and describe what the pipeline should build or process.
+            </p>
+            <input
+              type="text"
+              className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              placeholder={`Run name (defaults to "${template.name} — timestamp")`}
+              value={runName}
+              onChange={(e) => setRunName(e.target.value)}
+              autoFocus
+            />
+            <textarea
+              className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring min-h-[80px] resize-y"
+              placeholder="What should this pipeline build? (optional)"
+              value={inputContext}
+              onChange={(e) => setInputContext(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && e.metaKey) {
+                  startRun.mutate();
+                }
+              }}
+            />
+            <div className="flex gap-2">
+              <button
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+                disabled={startRun.isPending}
+                onClick={() => startRun.mutate()}
+              >
+                <Play className="h-3 w-3" />
+                {startRun.isPending ? "Starting..." : "Start"}
+              </button>
+              <button
+                className="rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-accent transition-colors"
+                onClick={() => { setShowRunDialog(false); setRunName(""); setInputContext(""); }}
+              >
+                Cancel
+              </button>
+            </div>
+            {startRun.isError && (
+              <p className="text-xs text-destructive">
+                {startRun.error instanceof Error ? startRun.error.message : "Failed to start run"}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Phase list */}
       <div className="space-y-3">

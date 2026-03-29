@@ -427,8 +427,13 @@ export function pipelineService(db: Db) {
       skillPlan ? { [phase.phaseKey]: agentPlan ?? { required: [], recommended: [] } } : null,
     );
 
-    // Parse scores from reflector output
+    // Parse scores from reflector output and validate bounds
     const scores = parseReflectorScores(agentOutput);
+    for (const key of Object.keys(scores)) {
+      if (scores[key] < 0 || scores[key] > 100) {
+        delete scores[key]; // Drop out-of-range scores rather than storing bad data
+      }
+    }
 
     // Parse used skills
     const usedSkills = parseUsedSkills(agentOutput);

@@ -397,6 +397,20 @@ export function Layout() {
                   {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
                 </Button>
               </div>
+              <div className="flex items-center gap-3 px-3 pb-1">
+                <Link
+                  to="/privacy"
+                  className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Privacy
+                </Link>
+                <Link
+                  to="/terms"
+                  className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Terms
+                </Link>
+              </div>
             </div>
           </div>
         )}

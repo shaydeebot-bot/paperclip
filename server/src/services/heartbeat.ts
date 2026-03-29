@@ -52,6 +52,7 @@ import {
 } from "./execution-workspace-policy.js";
 import { instanceSettingsService } from "./instance-settings.js";
 import { redactCurrentUserText, redactCurrentUserValue } from "../log-redaction.js";
+import { generateSkillPlan, formatSkillPromptSection } from "./pipeline/skill-planner.js";
 import {
   hasSessionCompactionThresholds,
   resolveSessionCompactionPolicy,
@@ -1976,6 +1977,7 @@ export function heartbeatService(db: Db) {
             id: issues.id,
             identifier: issues.identifier,
             title: issues.title,
+            description: issues.description,
             projectId: issues.projectId,
             projectWorkspaceId: issues.projectWorkspaceId,
             executionWorkspaceId: issues.executionWorkspaceId,
@@ -2293,6 +2295,28 @@ export function heartbeatService(db: Db) {
     if (executionWorkspace.projectId && !readNonEmptyString(context.projectId)) {
       context.projectId = executionWorkspace.projectId;
     }
+
+    // ── Skill recommendations for issue-driven heartbeats ──
+    if (issueContext && readNonEmptyString(context.wakeReason) === "issue_assigned") {
+      try {
+        const issueText = [issueContext.title, issueContext.description].filter(Boolean).join(" ");
+        if (issueText.trim().length > 0) {
+          const skillPlan = generateSkillPlan(issueText);
+          const agentRole = normalizeAgentNameKey(agent.name);
+          const agentPlan = agentRole ? skillPlan.plan[agentRole] ?? null : null;
+          const skillSection = formatSkillPromptSection(agentPlan);
+          if (skillSection.length > 0) {
+            context.paperclipSkillRecommendations = skillSection;
+          }
+        }
+      } catch (err) {
+        logger.warn(
+          { err, runId: run.id, agentId: agent.id, issueId },
+          "skill planner failed for issue — skipping recommendations",
+        );
+      }
+    }
+
     const runtimeSessionFallback = taskKey || resetTaskSession ? null : runtime.sessionId;
     let previousSessionDisplayId = truncateDisplayId(
       explicitResumeSessionDisplayId ??

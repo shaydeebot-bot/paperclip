@@ -14,9 +14,22 @@
 /**
  * Extract numeric scores from a reflector's output.
  * Looks for patterns like "| Category | 85 |" or "**Total: 85/100**"
+ *
+ * All scores are clamped to 0–100. Values outside that range are treated
+ * as parse artefacts and dropped.
  */
 export function parseReflectorScores(outputContent: string): Record<string, number> {
   const scores: Record<string, number> = {};
+
+  // Skip score parsing for sentinel-style output that uses severity counts
+  // instead of percentage scores (e.g. "critical: 0, high: 2, medium: 1").
+  if (isSentinelSeverityOutput(outputContent)) {
+    const sentinelScore = deriveSentinelScore(outputContent);
+    if (sentinelScore !== null) {
+      scores._total = sentinelScore;
+    }
+    return scores;
+  }
 
   // Pattern 1: markdown table rows — "| Category Name | 85 |"
   const tableRows = outputContent.matchAll(/\|\s*([^|]+?)\s*\|\s*(\d{1,3})\s*\|/g);
@@ -28,13 +41,50 @@ export function parseReflectorScores(outputContent: string): Record<string, numb
     }
   }
 
-  // Pattern 2: "**Total: 85/100**" or "Total Score: 85"
-  const totalMatch = outputContent.match(/(?:total|overall|weighted)[^:]*:\s*(\d{1,3})(?:\/100)?/i);
+  // Pattern 2: Explicit score patterns — "**Total: 85/100**", "Total Score: 85", "_total: 85"
+  // More restrictive than before: require ":" before the number to avoid grabbing stray numbers.
+  const totalMatch = outputContent.match(
+    /(?:\*{0,2})(?:total|overall|weighted|_total)[^:\n]{0,20}:\s*(\d{1,3})(?:\s*\/\s*100)?(?:\*{0,2})/i,
+  );
   if (totalMatch) {
-    scores._total = parseInt(totalMatch[1], 10);
+    const total = parseInt(totalMatch[1], 10);
+    if (total >= 0 && total <= 100) {
+      scores._total = total;
+    }
+    // Score > 100 is a parse error — drop it rather than storing bad data
   }
 
   return scores;
+}
+
+/**
+ * Detect if output is sentinel-style severity counts rather than percentage scores.
+ * Sentinel outputs look like: "critical: 0", "high: 2", "medium: 1", "low: 3"
+ */
+function isSentinelSeverityOutput(output: string): boolean {
+  const severityPattern = /\b(?:critical|high|medium|low)\s*:\s*\d+/gi;
+  const matches = output.match(severityPattern);
+  // If we see 3+ severity labels, this is a sentinel report, not a quality score
+  return (matches?.length ?? 0) >= 3;
+}
+
+/**
+ * Convert sentinel severity counts to a 0–100 quality score.
+ * 0 critical + 0 high = 100; any critical = 0; any high = 50; medium-only = 80.
+ */
+function deriveSentinelScore(output: string): number | null {
+  const extract = (label: string): number => {
+    const m = output.match(new RegExp(`\\b${label}\\s*:\\s*(\\d+)`, "i"));
+    return m ? parseInt(m[1], 10) : 0;
+  };
+  const critical = extract("critical");
+  const high = extract("high");
+  const medium = extract("medium");
+
+  if (critical > 0) return 0;
+  if (high > 0) return 50;
+  if (medium > 0) return 80;
+  return 100;
 }
 
 // ── Pattern Detection ────────────────────────────────────────────────────────

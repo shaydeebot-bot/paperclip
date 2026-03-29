@@ -188,6 +188,9 @@ export const pipelinesApi = {
   cancelRun: (runId: string) =>
     api.post<PipelineRun>(`/pipeline-runs/${runId}/cancel`, {}),
 
+  executeRun: (runId: string) =>
+    api.post<PipelineRun>(`/pipeline-runs/${runId}/execute`, {}),
+
   planSkills: (runId: string) =>
     api.post<SkillPlanResult>(`/pipeline-runs/${runId}/plan-skills`, {}),
 
